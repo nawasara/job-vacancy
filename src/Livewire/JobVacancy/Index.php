@@ -123,8 +123,11 @@ class Index extends Component
     /**
      * Search filters over job_title / company_name using the sanitized term.
      * The pattern is bound (no SQL injection) and the LIKE wildcards (`%`,
-     * `_`) of the user input are escaped with an explicit `ESCAPE` clause so
-     * they are matched literally on every driver (MySQL, SQLite, ...).
+     * `_`) of the user input are escaped with an explicit `ESCAPE '!'` clause
+     * so they are matched literally on every driver (MySQL, SQLite, ...).
+     * `!` is used as the escape character because MySQL treats a literal
+     * backslash inside a string as an escape sequence (`ESCAPE '\'` is a
+     * syntax error there), while `ESCAPE '!'` is portable across drivers.
      */
     protected function applySearchFilter($query): void
     {
@@ -137,20 +140,23 @@ class Index extends Component
         $pattern = "%{$term}%";
 
         $query->where(function ($builder) use ($pattern): void {
-            $builder->whereRaw('job_title LIKE ? ESCAPE \'\\\'', [$pattern])
-                ->orWhereRaw('company_name LIKE ? ESCAPE \'\\\'', [$pattern]);
+            $builder->whereRaw('job_title LIKE ? ESCAPE \'!\'', [$pattern])
+                ->orWhereRaw('company_name LIKE ? ESCAPE \'!\'', [$pattern]);
         });
     }
 
     /**
      * Sanitize a search term: trim surrounding whitespace and escape the LIKE
-     * wildcards `%`, `_` and `\` so they are treated as literal characters.
+     * escape character `!` and the wildcards `%`/`_` so they are treated as
+     * literal characters.
      */
     protected function sanitizeSearchTerm(string $value): string
     {
         $value = trim($value);
 
-        return str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $value);
+        // Escape `!` first (it becomes `!!`), then the wildcards: a literal
+        // `%` → `!%` and a literal `_` → `!_` when parsed with `ESCAPE '!'`.
+        return str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $value);
     }
 
     /**
