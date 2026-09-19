@@ -1,0 +1,54 @@
+{
+    "name": "nawasara/job-vacancy",
+    "description": "Job vacancy module for the Nawasara superapp framework — listing and detail, synced from an external service management platform. English port of nawasara/loker.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "nawasara",
+        "laravel",
+        "job-vacancy",
+        "job",
+        "vacancy",
+        "recruitment"
+    ],
+    "authors": [
+        {
+            "name": "Ricky R",
+            "email": "ricky.romdhoni@gmail.com",
+            "role": "mini dev"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/nawasara/job-vacancy/issues",
+        "source": "https://github.com/nawasara/job-vacancy"
+    },
+    "autoload": {
+        "psr-4": {
+            "Nawasara\\JobVacancy\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Nawasara\\JobVacancy\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "illuminate/database": "^10.0|^12.0",
+        "illuminate/support": "^10.0|^12.0",
+        "spatie/laravel-permission": "^6.0",
+        "nawasara/sync": "*",
+        "nawasara/ui": "*",
+        "nawasara/vault": "*",
+        "livewire/livewire": "^3.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Nawasara\\JobVacancy\\JobVacancyServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
