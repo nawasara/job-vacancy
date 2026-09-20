@@ -7,10 +7,13 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Nawasara\JobVacancy\Jobs\SyncJobVacanciesJob;
 use Nawasara\JobVacancy\Models\JobVacancy;
+use Nawasara\Sync\Concerns\TracksLastSync;
 
 class Index extends Component
 {
+    use TracksLastSync;
     use WithPagination;
 
     #[Url(except: '')]
@@ -121,6 +124,44 @@ class Index extends Component
     }
 
     /**
+     * Kapan Rakaca terakhir berhasil ditarik.
+     *
+     * Dibaca dari riwayat nawasara/sync, bukan dari kolom di tabel lowongan:
+     * sinkronisasi yang berjalan tetapi tidak mengubah satu baris pun TETAP
+     * sinkronisasi yang berhasil, dan stempel di baris data tidak dapat
+     * membedakannya dari "sudah lama tidak jalan".
+     *
+     * null berarti belum pernah berhasil sekali pun, dan sync-info-bar
+     * menggambarnya sebagai peringatan, bukan sebagai "baru saja".
+     */
+    #[Computed]
+    public function lastSyncedAt(): ?string
+    {
+        $when = $this->lastSuccessfulSyncAt('job-vacancy', 'sync_job_vacancies');
+
+        return $when?->diffForHumans();
+    }
+
+    /**
+     * Tarik ulang dari Rakaca sekarang, tanpa menunggu jadwal 15 menit.
+     *
+     * Dijalankan ANTREAN, bukan langsung: satu siklus menarik beberapa halaman
+     * dari Rakaca dan dapat memakan waktu lebih lama daripada yang pantas
+     * ditunggu di depan layar. Staf mendapat pemberitahuan segera, dan
+     * hasilnya muncul begitu antrean selesai.
+     */
+    public function syncNow(): void
+    {
+        Gate::authorize('job.vacancy.view');
+
+        SyncJobVacanciesJob::dispatch(triggerSource: 'manual');
+
+        unset($this->lastSyncedAt);
+
+        $this->dispatch('toast', type: 'success', message: 'Sinkronisasi dijalankan. Daftar diperbarui begitu selesai.');
+    }
+
+    /**
      * Search filters over job_title / company_name using the sanitized term.
      * The pattern is bound (no SQL injection) and the LIKE wildcards (`%`,
      * `_`) of the user input are escaped with an explicit `ESCAPE '!'` clause
@@ -174,9 +215,9 @@ class Index extends Component
             ->first();
 
         if ($jobVacancy === null) {
-            $this->detail = ['job_title' => 'Job vacancy not found', 'slug' => ''];
+            $this->detail = ['job_title' => 'Lowongan tidak ditemukan', 'slug' => ''];
             $this->detailHtml = '<p class="text-sm text-gray-500 dark:text-neutral-500">'.
-                'Job vacancy not found or already expired.</p>';
+                'Lowongan tidak ditemukan atau sudah berakhir.</p>';
         } else {
             $this->detail = [
                 'job_title'  => $jobVacancy->job_title,

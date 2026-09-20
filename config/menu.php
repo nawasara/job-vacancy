@@ -23,7 +23,7 @@ return [
         'permission' => 'job.vacancy.view',
         'submenu' => [
             [
-                'label' => 'Job Vacancies',
+                'label' => 'Lowongan Kerja',
                 'icon' => 'lucide-briefcase',
                 'url' => url('nawasara-job-vacancy/job-vacancies'),
                 'permission' => 'job.vacancy.view',

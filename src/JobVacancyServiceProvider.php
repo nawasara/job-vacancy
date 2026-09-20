@@ -92,6 +92,18 @@ class JobVacancyServiceProvider extends ServiceProvider
 
     /**
      * Mount API routes under /api/v1/job-vacancy/job-vacancies. Guarded by class_exists.
+     *
+     * Behind `api.citizen` (Keycloak JWT from the citizen realm), NOT
+     * `api.auth`. The caller is the SuperApps mobile app, and an `nws_` token
+     * cannot serve it: that path leans on an IP allow list, an Origin allow
+     * list, and the token staying secret, and none of the three holds for tens
+     * of thousands of phones whose IP moves, that send no Origin, and whose
+     * APK can be unpacked. The reasoning is written out in
+     * AuthenticateCitizenJwt.
+     *
+     * Same path PBB uses. Job vacancies are public at the source, so requiring
+     * a login is not about hiding them; it is about having a caller that can be
+     * rate limited per person instead of per shared carrier IP.
      */
     protected function registerApiRoutes(): void
     {
@@ -102,7 +114,7 @@ class JobVacancyServiceProvider extends ServiceProvider
         $prefix = (string) config('nawasara-api.route.prefix', 'api/v1').'/job-vacancy';
 
         \Illuminate\Support\Facades\Route::prefix($prefix)
-            ->middleware(['api', 'api.auth', 'api.log', 'throttle:job-vacancy-api'])
+            ->middleware(['api', 'api.citizen', 'throttle:job-vacancy-api'])
             ->name('nawasara-api.job-vacancy.')
             ->group(__DIR__.'/../routes/api.php');
     }
@@ -119,9 +131,9 @@ class JobVacancyServiceProvider extends ServiceProvider
         RateLimiter::for('job-vacancy-api', function ($request) {
             $perMinute = (int) config('nawasara-job-vacancy.job_vacancy.api.rate_limit_per_minute', 120);
 
-            $tokenId = $request->attributes->get('api_token')?->id ?? 'anon';
+            $key = $request->attributes->get('citizen_sub') ?: $request->ip();
 
-            return Limit::perMinute($perMinute)->by('job-vacancy:'.$tokenId.':'.$request->ip());
+            return Limit::perMinute($perMinute)->by('job-vacancy:'.$key);
         });
     }
 }

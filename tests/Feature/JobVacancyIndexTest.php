@@ -62,7 +62,7 @@ class JobVacancyIndexTest extends TestCase
         Livewire::test(Index::class)
             ->assertSee('Computer Operator')
             ->assertSee('Example Corp')
-            ->assertSee('Location');
+            ->assertSee('Lokasi');
     }
 
     public function test_detail_renders_compact_preview_in_modal(): void
@@ -87,8 +87,8 @@ class JobVacancyIndexTest extends TestCase
             ->assertSet('detail.job_title', 'Finance Admin')
             ->assertSet('detail.slug', 'finance-admin')
             ->assertDispatched('modal-open:job-vacancy-detail')
-            ->assertSet('detailHtml', fn (string $html) => str_contains($html, 'Location')
-                && str_contains($html, 'Salary')
+            ->assertSet('detailHtml', fn (string $html) => str_contains($html, 'Lokasi')
+                && str_contains($html, 'Gaji')
                 && ! str_contains($html, 'Qualifications')
                 && ! str_contains($html, '<ul'));
     }
@@ -99,9 +99,9 @@ class JobVacancyIndexTest extends TestCase
 
         Livewire::test(Index::class)
             ->call('openDetail', 'does-not-exist')
-            ->assertSet('detail.job_title', 'Job vacancy not found')
+            ->assertSet('detail.job_title', 'Lowongan tidak ditemukan')
             ->assertDispatched('modal-open:job-vacancy-detail')
-            ->assertSet('detailHtml', fn (string $html) => str_contains($html, 'already expired'));
+            ->assertSet('detailHtml', fn (string $html) => str_contains($html, 'sudah berakhir'));
     }
 
     public function test_search_filters_by_title_or_company(): void

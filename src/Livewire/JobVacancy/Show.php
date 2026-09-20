@@ -27,7 +27,7 @@ class Show extends Component
             ->first();
 
         if ($jobVacancy === null) {
-            abort(404, 'Job vacancy not found.');
+            abort(404, 'Lowongan tidak ditemukan.');
         }
 
         return $jobVacancy;

@@ -10,32 +10,32 @@
     {{-- Concise meta --}}
     <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <div class="flex flex-col gap-0.5">
-            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Location</dt>
+            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Lokasi</dt>
             <dd class="text-gray-900 dark:text-neutral-100">{{ $jobVacancy->location ?: '—' }}</dd>
         </div>
         <div class="flex flex-col gap-0.5">
-            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Salary</dt>
+            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Gaji</dt>
             <dd class="font-medium text-gray-900 dark:text-neutral-100">{{ $jobVacancy->salary ?: '—' }}</dd>
         </div>
         <div class="flex flex-col gap-0.5">
-            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Type</dt>
+            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Tipe</dt>
             <dd class="text-gray-900 dark:text-neutral-100">{{ $jobVacancy->type ?: '—' }}</dd>
         </div>
         <div class="flex flex-col gap-0.5">
-            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Category</dt>
+            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Kategori</dt>
             <dd class="text-gray-900 dark:text-neutral-100">{{ $jobVacancy->category ?: '—' }}</dd>
         </div>
         <div class="flex flex-col gap-0.5">
-            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Expires</dt>
+            <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Berakhir</dt>
             <dd class="text-gray-900 dark:text-neutral-100">{{ $jobVacancy->expires_at?->format('d M Y') ?: '—' }}</dd>
         </div>
         <div class="flex items-center justify-between gap-2">
             <dt class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">Status</dt>
             <dd>
                 @if ($jobVacancy->is_expired)
-                    <x-nawasara-ui::badge color="neutral" size="sm">expired</x-nawasara-ui::badge>
+                    <x-nawasara-ui::badge color="neutral" size="sm">Kedaluwarsa</x-nawasara-ui::badge>
                 @else
-                    <x-nawasara-ui::badge color="success" size="sm" icon="lucide-circle-check">active</x-nawasara-ui::badge>
+                    <x-nawasara-ui::badge color="success" size="sm" icon="lucide-circle-check">Aktif</x-nawasara-ui::badge>
                 @endif
             </dd>
         </div>

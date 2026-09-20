@@ -1,56 +1,81 @@
 <div>
+    <x-slot name="breadcrumb">
+        <livewire:nawasara-ui.shared-components.breadcrumb
+            :items="[['label' => 'Rakaca', 'url' => '#'], ['label' => 'Lowongan Kerja']]" />
+    </x-slot>
+
     <x-nawasara-ui::page.container>
-        {{-- Page header --}}
         <x-nawasara-ui::page-header
-            title="Job Vacancies"
-            description="List of job vacancies from the upstream service. Read-only data from the service management platform."
-            :count="$this->jobVacancies->total().' vacancies'">
+            title="Lowongan Kerja"
+            description="Lowongan kerja yang ditarik dari Rakaca. Data hanya dibaca, perubahannya dilakukan di Rakaca."
+            :count="$this->jobVacancies->total().' lowongan'">
+            {{-- Zona aksi kanan. Tombol sinkronisasi ada DI SINI, bukan di
+                 toolbar saringan: ia mengubah data, sedangkan toolbar hanya
+                 mengubah tampilan. --}}
+            <x-nawasara-ui::icon-button icon="refresh-cw"
+                tooltip="Tarik ulang dari Rakaca sekarang"
+                wire:click="syncNow" loadingTarget="syncNow" placement="left" />
         </x-nawasara-ui::page-header>
 
-        {{-- Toolbar filter — search + filter dropdown + per-page + reset --}}
-        <div class="flex flex-wrap items-center gap-2">
-            {{-- Search — wire:model with debounce so the sanitized query only
-                runs 300ms after the user stops typing --}}
-            <div class="relative flex-1 min-w-48">
-                <div class="absolute inset-y-0 start-0 flex items-center pointer-events-none ps-3.5">
-                    <x-lucide-search class="shrink-0 size-4 text-gray-400 dark:text-neutral-500" />
+        {{-- Kapan datanya terakhir disegarkan. Tanpa ini staf tidak punya cara
+             membedakan "Rakaca memang sedang sepi" dari "sinkronisasinya mati
+             sejak tiga hari lalu", dan keduanya terlihat persis sama. --}}
+        <x-nawasara-ui::sync-info-bar :lastSyncedAt="$this->lastSyncedAt" />
+
+        {{-- Toolbar, the shape every list page in Nawasara uses (AGENTS.md §1a).
+
+             One filter-panel rather than a row of standalone filter-dropdowns:
+             separate dropdowns eat the toolbar width, leave no room for an
+             action button, and give the operator no single place to see what is
+             currently filtered. The panel teleports its chips into
+             [data-filter-chips] below, which is why that div is not optional. --}}
+        <div class="space-y-2 mb-4">
+            <div class="flex flex-col md:flex-row md:flex-nowrap md:items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    <x-nawasara-ui::filter-panel
+                        label="Saring"
+                        :state="['location' => $location, 'type' => $type, 'category' => $category]"
+                        :labels="[
+                            'location' => $this->locationOptions,
+                            'type' => $this->typeOptions,
+                            'category' => $this->categoryOptions,
+                        ]">
+                        <x-nawasara-ui::filter-group label="Lokasi" model="location"
+                            :items="$this->locationOptions" icon="lucide-map-pin" />
+                        <x-nawasara-ui::filter-group label="Tipe" model="type"
+                            :items="$this->typeOptions" icon="lucide-clock" />
+                        <x-nawasara-ui::filter-group label="Kategori" model="category"
+                            :items="$this->categoryOptions" icon="lucide-tag" />
+                    </x-nawasara-ui::filter-panel>
                 </div>
-                <input type="search"
-                    wire:model.live.debounce.300ms="q"
-                    placeholder="Search job title or company..."
-                    autocomplete="off"
-                    aria-label="Search job vacancies"
-                    class="py-2.5 ps-10 pe-4 block w-full border border-gray-200 rounded-lg text-sm focus:border-emerald-600 focus:ring-emerald-600 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-400 dark:placeholder-neutral-500 dark:focus:ring-neutral-600" />
+
+                <x-nawasara-ui::search-input model="q" placeholder="Cari nama pekerjaan atau perusahaan..." />
             </div>
 
-            <x-nawasara-ui::filter-dropdown label="Location" :items="$this->locationOptions" model="location" />
-            <x-nawasara-ui::filter-dropdown label="Type" :items="$this->typeOptions" model="type" />
-            <x-nawasara-ui::filter-dropdown label="Category" :items="$this->categoryOptions" model="category" />
-
-            <select wire:model.live="perPage"
-                aria-label="Per page"
-                class="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
-                <option value="4">4</option>
-                <option value="8">8</option>
-                <option value="12">12</option>
-                <option value="24">24</option>
-            </select>
-
-            @if ($q !== '' || $location !== '' || $type !== '' || $category !== '')
-                <x-nawasara-ui::button variant="ghost" size="sm" wire:click="clearFilters">
-                    Reset filters
-                </x-nawasara-ui::button>
-            @endif
+            {{-- Required. filter-panel teleports its chips here; without this
+                 div the chips vanish and nobody can tell what is filtered. --}}
+            <div data-filter-chips class="flex flex-wrap items-center gap-2"></div>
         </div>
 
         @if ($this->jobVacancies->isEmpty())
-            <x-nawasara-ui::empty-state icon="lucide-briefcase" title="No job vacancies"
-                description="No vacancy matches these filters, or the upstream credentials are not configured in Vault.">
-            </x-nawasara-ui::empty-state>
+            {{-- Two empty states, not one. A single message sends people looking
+                 for data that is there, just filtered out. --}}
+            @if ($q !== '' || $location !== '' || $type !== '' || $category !== '')
+                <x-nawasara-ui::empty-state icon="lucide-search-x"
+                    title="Tidak ada yang cocok"
+                    description="Tidak ada lowongan yang cocok dengan pencarian atau saringan ini. Ubah kata kuncinya, atau bersihkan saringan.">
+                    <x-nawasara-ui::button size="sm" color="secondary" wire:click="clearFilters">
+                        Bersihkan saringan
+                    </x-nawasara-ui::button>
+                </x-nawasara-ui::empty-state>
+            @else
+                <x-nawasara-ui::empty-state icon="lucide-briefcase"
+                    title="Belum ada lowongan"
+                    description="Belum ada yang ditarik dari Rakaca. Periksa kredensial Rakaca di Vault, lalu jalankan sinkronisasi." />
+            @endif
         @else
-            {{-- Table of job vacancies --}}
             <x-nawasara-ui::table
-                :headers="['Job', 'Location', 'Type', 'Category', 'Expires', 'Salary', '']"
+                :headers="['Pekerjaan', 'Lokasi', 'Tipe', 'Kategori', 'Berakhir', 'Gaji', '']"
                 stickyLast>
                 <x-slot:table>
                     @foreach ($this->jobVacancies as $item)
@@ -66,25 +91,33 @@
                                 </p>
                             </td>
                             <td class="px-6 py-3 text-sm text-gray-600 dark:text-neutral-400">
-                                {{ $item->location ?: '—' }}
+                                {{ $item->location ?: '-' }}
                             </td>
                             <td class="px-6 py-3 text-sm text-gray-600 dark:text-neutral-400">
-                                {{ $item->type ?: '—' }}
+                                {{ $item->type ?: '-' }}
                             </td>
                             <td class="px-6 py-3 text-sm text-gray-600 dark:text-neutral-400">
-                                {{ $item->category ?: '—' }}
+                                {{ $item->category ?: '-' }}
                             </td>
                             <td class="px-6 py-3 text-sm text-gray-600 dark:text-neutral-400">
-                                {{ $item->expires_at?->format('d M Y') ?: '—' }}
+                                {{ $item->expires_at?->format('d M Y') ?: '-' }}
                             </td>
                             <td class="px-6 py-3 text-sm font-medium text-gray-900 dark:text-neutral-100">
-                                {{ $item->salary ?: '—' }}
+                                {{ $item->salary ?: '-' }}
                             </td>
-                            <td class="px-6 py-3 text-right">
-                                <x-nawasara-ui::button size="sm" color="secondary" variant="outline"
-                                    wire:click.stop="openDetail('{{ $item->slug }}')">
-                                    Details
-                                </x-nawasara-ui::button>
+                            <td class="px-6 py-3 text-right" wire:click.stop>
+                                {{-- Three-dot menu, not a row of buttons. Inline
+                                     buttons eat the column width and leave no
+                                     room for a third action later, which is how
+                                     pages end up quietly losing one. --}}
+                                <x-nawasara-ui::dropdown-menu-action :id="$item->slug" :items="[
+                                    ['type' => 'click', 'label' => 'Pratinjau',
+                                     'wire:click' => 'openDetail(\''.$item->slug.'\')',
+                                     'icon' => 'lucide-eye', 'permission' => 'job.vacancy.view'],
+                                    ['type' => 'link', 'label' => 'Buka halaman lengkap',
+                                     'href' => route('nawasara-job-vacancy.job-vacancy.show', $item->slug),
+                                     'icon' => 'lucide-external-link', 'permission' => 'job.vacancy.view'],
+                                ]" />
                             </td>
                         </tr>
                     @endforeach
@@ -99,8 +132,8 @@
         {{-- Modal preview — compact content rendered server-side via Index::openDetail();
             full detail opens from the "View full details" button. --}}
         <x-nawasara-ui::modal id="job-vacancy-detail"
-            :title="$detail['job_title'] ?? 'Job Vacancy Details'"
-            :subtitle="isset($detail['company']) ? ($detail['company'].' · '.($detail['location'] ?: 'Location not available')) : ''"
+            :title="$detail['job_title'] ?? 'Rincian Lowongan'"
+            :subtitle="isset($detail['company']) ? ($detail['company'].' · '.($detail['location'] ?: 'Lokasi tidak tersedia')) : ''"
             maxWidth="lg">
             <div wire:loading.flex wire:target="detail" class="justify-center py-10">
                 <x-nawasara-ui::loading />
@@ -109,7 +142,7 @@
             <div wire:loading.remove wire:target="detail">
                 @if ($detailHtml === '')
                     <p class="text-sm text-gray-500 dark:text-neutral-500">
-                        Select a vacancy to see details.
+                        Pilih satu lowongan untuk melihat rinciannya.
                     </p>
                 @else
                     {!! $detailHtml !!}
@@ -121,11 +154,11 @@
                     <x-nawasara-ui::button size="sm"
                         :href="route('nawasara-job-vacancy.job-vacancy.show', $detail['slug'])"
                         wire:navigate.hover>
-                        View full details
+                        Lihat selengkapnya
                     </x-nawasara-ui::button>
                 @endif
                 <x-nawasara-ui::button size="sm" color="secondary" @click="close()">
-                    Close
+                    Tutup
                 </x-nawasara-ui::button>
             </x-slot:footer>
         </x-nawasara-ui::modal>

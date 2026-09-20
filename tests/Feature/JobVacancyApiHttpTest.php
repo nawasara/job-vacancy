@@ -6,15 +6,23 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
-use Nawasara\Api\Services\TokenManager;
+use Nawasara\Api\Services\CitizenJwtVerifier;
 use Nawasara\JobVacancy\Models\JobVacancy;
 use Tests\TestCase;
 
 /**
- * End-to-end tests over the full HTTP path (/api/v1/job-vacancy) with real
- * API tokens (`TokenManager::create`). M6-B: closes the "auth/scope only
- * smoke-tested manually" gap — 401/403/200/404 regressions are now caught
- * automatically. Includes verification of the `job-vacancy-api` rate limiter.
+ * End-to-end tests over the full HTTP path (/api/v1/job-vacancy).
+ *
+ * The endpoint moved from `api.auth` (an `nws_` token, for trusted systems) to
+ * `api.citizen` (a Keycloak JWT) on 20 September 2026, because the caller is
+ * the SuperApps mobile app. An `nws_` token cannot serve phones: it leans on an
+ * IP allow list, an Origin allow list, and the token staying secret, and none
+ * of the three survives an APK that anyone can unpack.
+ *
+ * These tests stub the JWT verification rather than minting real Keycloak
+ * tokens. What is under test is the route contract (401/200/404, the response
+ * shape, the rate limiter), not the signature checking, which belongs to
+ * nawasara/api and is tested there.
  */
 class JobVacancyApiHttpTest extends TestCase
 {
@@ -50,16 +58,27 @@ class JobVacancyApiHttpTest extends TestCase
         ], $overrides));
     }
 
-    private function issueToken(array $scopes): string
+    /**
+     * Act as a signed-in citizen.
+     *
+     * Swaps the JWT verifier for one that accepts a fixed token and returns the
+     * claims a real Keycloak token would carry. The middleware, the route, the
+     * rate limiter key and the controller all still run for real.
+     */
+    private function asCitizen(string $sub = 'warga-uji-0001'): self
     {
-        ['plaintext' => $plaintext] = app(TokenManager::class)->create('M6 e2e', $scopes);
+        $this->mock(CitizenJwtVerifier::class, function ($mock) use ($sub) {
+            $mock->shouldReceive('verify')->andReturn(['sub' => $sub]);
+        });
 
-        return $plaintext;
+        return $this;
     }
 
-    private function authorizedGet(string $uri, string $plaintext): TestResponse
+    private function citizenGet(string $uri, string $sub = 'warga-uji-0001'): TestResponse
     {
-        return $this->withHeader('Authorization', 'Bearer '.$plaintext)->getJson($uri);
+        return $this->asCitizen($sub)
+            ->withHeader('Authorization', 'Bearer jwt-palsu-untuk-uji')
+            ->getJson($uri);
     }
 
     public function test_401_without_token(): void
@@ -69,30 +88,40 @@ class JobVacancyApiHttpTest extends TestCase
             ->assertJsonPath('error.code', 'missing_token');
     }
 
-    public function test_401_with_invalid_token(): void
+    public function test_401_with_invalid_jwt(): void
     {
-        $this->withHeader('Authorization', 'Bearer nws_'.Str::random(40))
+        $this->mock(CitizenJwtVerifier::class, function ($mock) {
+            $mock->shouldReceive('verify')->andReturn(null);
+        });
+
+        $this->withHeader('Authorization', 'Bearer '.Str::random(40))
             ->getJson('/api/v1/job-vacancy/job-vacancies')
-            ->assertStatus(401)
-            ->assertJsonPath('error.code', 'invalid_token');
+            ->assertStatus(401);
     }
 
-    public function test_403_insufficient_scope(): void
+    /**
+     * An `nws_` system token no longer opens this endpoint.
+     *
+     * Kept as a test rather than deleted with the scope check: the endpoint used
+     * to accept exactly this, and anything that silently starts accepting it
+     * again has reopened the path meant for phones to trusted systems.
+     */
+    public function test_401_for_system_token(): void
     {
-        $token = $this->issueToken(['cctv.camera.read']);
+        $this->mock(CitizenJwtVerifier::class, function ($mock) {
+            $mock->shouldReceive('verify')->andReturn(null);
+        });
 
-        $this->authorizedGet('/api/v1/job-vacancy/job-vacancies', $token)
-            ->assertStatus(403)
-            ->assertJsonPath('error.code', 'insufficient_scope');
+        $this->withHeader('Authorization', 'Bearer nws_'.Str::random(40))
+            ->getJson('/api/v1/job-vacancy/job-vacancies')
+            ->assertStatus(401);
     }
 
     public function test_200_list_compact_and_meta_over_http(): void
     {
         $this->makeJobVacancy();
         $this->makeJobVacancy(['slug' => 'sales-cashier', 'job_title' => 'Sales Cashier']);
-        $token = $this->issueToken(['job.vacancy.read']);
-
-        $response = $this->authorizedGet('/api/v1/job-vacancy/job-vacancies', $token);
+        $response = $this->citizenGet('/api/v1/job-vacancy/job-vacancies');
 
         $response->assertOk()
             ->assertJsonPath('meta.total', 2)
@@ -109,9 +138,7 @@ class JobVacancyApiHttpTest extends TestCase
     {
         $this->makeJobVacancy();
         $this->makeJobVacancy(overrides: ['slug' => 'sales-cashier', 'job_title' => 'Sales Cashier', 'job_description' => 'Serve customers']);
-        $token = $this->issueToken(['job.vacancy.read']);
-
-        $this->authorizedGet('/api/v1/job-vacancy/job-vacancies?q=Record%20daily%20store%20finance', $token)
+        $this->citizenGet('/api/v1/job-vacancy/job-vacancies?q=Record%20daily%20store%20finance')
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.slug', 'finance-admin');
@@ -120,9 +147,7 @@ class JobVacancyApiHttpTest extends TestCase
     public function test_200_detail_over_http(): void
     {
         $jobVacancy = $this->makeJobVacancy();
-        $token = $this->issueToken(['job.vacancy.read']);
-
-        $this->authorizedGet('/api/v1/job-vacancy/job-vacancies/'.$jobVacancy->slug, $token)
+        $this->citizenGet('/api/v1/job-vacancy/job-vacancies/'.$jobVacancy->slug)
             ->assertOk()
             ->assertJsonPath('data.slug', $jobVacancy->slug)
             ->assertJsonPath('data.apply_url', 'https://bit.ly/apply')
@@ -131,9 +156,7 @@ class JobVacancyApiHttpTest extends TestCase
 
     public function test_404_unknown_slug_over_http(): void
     {
-        $token = $this->issueToken(['job.vacancy.read']);
-
-        $this->authorizedGet('/api/v1/job-vacancy/job-vacancies/does-not-exist', $token)
+        $this->citizenGet('/api/v1/job-vacancy/job-vacancies/does-not-exist')
             ->assertStatus(404)
             ->assertJsonPath('error', 'not_found');
     }
@@ -148,10 +171,8 @@ class JobVacancyApiHttpTest extends TestCase
     public function test_429_when_rate_limit_exceeded(): void
     {
         config(['nawasara-job-vacancy.job_vacancy.api.rate_limit_per_minute' => 2]);
-        $token = $this->issueToken(['job.vacancy.read']);
-
-        $this->authorizedGet('/api/v1/job-vacancy/job-vacancies', $token)->assertOk();
-        $this->authorizedGet('/api/v1/job-vacancy/job-vacancies', $token)->assertOk();
-        $this->authorizedGet('/api/v1/job-vacancy/job-vacancies', $token)->assertStatus(429);
+        $this->citizenGet('/api/v1/job-vacancy/job-vacancies')->assertOk();
+        $this->citizenGet('/api/v1/job-vacancy/job-vacancies')->assertOk();
+        $this->citizenGet('/api/v1/job-vacancy/job-vacancies')->assertStatus(429);
     }
 }
