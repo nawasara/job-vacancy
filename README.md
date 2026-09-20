@@ -35,6 +35,30 @@ This command (idempotent):
 3. Seeds role `job-vacancy` + permission `job.vacancy.view`
 4. Injects the Vault group `job-vacancy` into `config/nawasara-vault.php` (when the Vault config is already published)
 
+### Register the package with Tailwind
+
+`php artisan job-vacancy:install` cannot do this one, and it is the step most
+likely to be skipped. Add the package to `resources/css/app.css` in the host
+application:
+
+```css
+@source "../../vendor/nawasara/job-vacancy";
+```
+
+Without it **every Tailwind class in this package's Blade files is dropped from
+the build**. Nothing errors; the pages render with no styling at all, and the
+classes that do survive are only the ones another package happens to use as
+well, which makes the breakage look random rather than total.
+
+Measured on 20 September 2026: adding that line grew the compiled CSS by
+1,380 bytes. To check it yourself, build and look for a class this package
+actually needs:
+
+```bash
+npm run build
+grep -c "bg-emerald-600" public/build/assets/app-*.css
+```
+
 Add it manually when the Vault config is not published:
 
 ```php
